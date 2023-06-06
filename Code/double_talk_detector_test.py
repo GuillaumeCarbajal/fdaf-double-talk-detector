@@ -43,8 +43,8 @@ def main():
         # "../../../../../../stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_external.wav"
         # "stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_external.wav"
         # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_external.wav"
-        "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_external.wav"
-        # "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-nearend_16k.wav"
+        # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_external.wav"
+        "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-nearend_16k.wav"
     )
     signal_loudspeaker, fe = sf.read(
         # "../../outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_ECOutput.wav"
@@ -53,26 +53,29 @@ def main():
         # "../../../../../../stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_internal.wav"
         # "stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_internal.wav"
         # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_internal.wav"
-        "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_internal.wav"
-        # "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-farend_16k.wav"
+        # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_internal.wav"
+        "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-farend_16k.wav"
     )
     noise_signal, fe = sf.read(
         # "../../../../../../stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_nearend.wav"
         # "stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_nearend.wav"
         # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_nearend.wav"
-        "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_nearend.wav"
-        # "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-nearend-only.wav"
+        # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_nearend.wav"
+        "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-nearend-only.wav"
     )
 
     # N = 4096
-    N = 512
+    # N = 512
+    N = 256
     # O = int(N - 1)
+
+    filter_length = 1024
 
     dtd = CoherenceDoubleTalkDetector(block_length=N, lambda_coherence=0.9)
     dtd_cc = CrossCorrelationDoubleTalkDetector(block_length=N, lambda_coherence=0.9999)
     dtd_benesty = BenestyDoubleTalkDetector(block_length=N, lambda_coherence=0.999, lambda_rls=0.9999)
     dtd_robust_benesty = RobustBenestyDoubleTalkDetector(block_length=N, lambda_coherence=0.9999, lambda_rls=0.99999)
-    dtd_mdf = MDFDoubleTalkDetector(block_length=N, lambda_coherence=0.9)
+    dtd_mdf = MDFDoubleTalkDetector(block_length=N, filter_length=filter_length, lambda_coherence=0.9)
 
     noise_power_threshold = 0.0010  # power of noise block to account as active (for benchmark purposes only)
 
@@ -86,30 +89,38 @@ def main():
 
     signal_loudspeaker /= (signal_loudspeaker.max() / 4)
 
-    # To realign external / internal audio
-    signal_microphone = signal_microphone[int(0.08*fe):]
-    signal_microphone = np.pad(signal_microphone, pad_width=(0,int(0.08*fe)), mode="constant")
 
-    # pad 0 at beginning of signal_loudspeaker
-    padding = [(0, 0) for _ in range(signal_loudspeaker.ndim)]
-    padding[-1] = (N-1, 0)
-    signal_loudspeaker_padded = np.pad(signal_loudspeaker, padding, mode="constant")
 
-    # Window the time series.
-    signal_loudspeaker_frames = util.frame(signal_loudspeaker_padded, frame_length=N, hop_length=1)
+    # # To realign external / internal audio
+    # signal_microphone = signal_microphone[int(0.08*fe):]
+    # signal_microphone = np.pad(signal_microphone, pad_width=(0,int(0.08*fe)), mode="constant")
 
-    for i in tqdm(range(len(signal_microphone)-1)):
-    # for i in range(len(signal_loudspeaker)-1):
-        mic_block = signal_microphone[i]
-        speaker_block = signal_loudspeaker_frames[:,i]
-        # speaker_block = signal_loudspeaker[i]
 
-        #TODO: add more samples for X = (x1, x2, ..., xN) where x1 is vector of length N
-        #TODO: run it again....
-        #TODO: make it faster with MDF
-        detector_output[i: (i + 1)] = dtd_robust_benesty.is_double_talk(speaker_block, mic_block)
-        # detector_output[i: (i + 1)] = dtd_benesty.is_double_talk(speaker_block, mic_block)
-        # detector_output[i: (i + 1)] = dtd_cc.is_double_talk(speaker_block, mic_block)
+
+
+    # # pad 0 at beginning of signal_loudspeaker
+    # padding = [(0, 0) for _ in range(signal_loudspeaker.ndim)]
+    # padding[-1] = (N-1, 0)
+    # signal_loudspeaker_padded = np.pad(signal_loudspeaker, padding, mode="constant")
+
+    # # Window the time series.
+    # signal_loudspeaker_frames = util.frame(signal_loudspeaker_padded, frame_length=N, hop_length=1)
+
+    # for i in tqdm(range(len(signal_microphone)-1)):
+    # # for i in range(len(signal_loudspeaker)-1):
+    #     mic_block = signal_microphone[i]
+    #     speaker_block = signal_loudspeaker_frames[:,i]
+    #     # speaker_block = signal_loudspeaker[i]
+
+    #     #TODO: add more samples for X = (x1, x2, ..., xN) where x1 is vector of length N
+    #     #TODO: run it again....
+    #     #TODO: make it faster with MDF
+    #     detector_output[i: (i + 1)] = dtd_robust_benesty.is_double_talk(speaker_block, mic_block)
+    #     # detector_output[i: (i + 1)] = dtd_benesty.is_double_talk(speaker_block, mic_block)
+    #     # detector_output[i: (i + 1)] = dtd_cc.is_double_talk(speaker_block, mic_block)
+
+
+
 
     # # Gansler
     # # Chunk size = FFT size
@@ -159,46 +170,44 @@ def main():
 
 
 
-    # # MDF, Gansler
-    # for i in range(0, nb_iterations):
-    #     # print(f"Iteration {i+1} out of {nb_iterations}")
+    # MDF, Gansler
+    for i in range(0, nb_iterations):
+        # print(f"Iteration {i+1} out of {nb_iterations}")
 
-    #     start = time.time()
+        start = time.time()
 
-    #     # Gansler
-    #     mic_block = signal_microphone[i * N : (i + 1) * N]
-    #     speaker_block = signal_loudspeaker[i * N : (i + 1) * N]
-    #     noise_block = noise_signal[i * N : (i + 1) * N]
+        # MDF, Gansler
+        mic_block = signal_microphone[i * N : (i + 1) * N]
+        speaker_block = signal_loudspeaker[i * N : (i + 1) * N]
+        noise_block = noise_signal[i * N : (i + 1) * N]
 
-    #     # Benesty
-    #     # mic_block = signal_microphone[i * O : i * O + N]
-    #     # speaker_block = signal_loudspeaker[i * O : i * O + N]
-    #     # noise_block = noise_signal[i * O : i * O + N]
+        # Benesty
+        # mic_block = signal_microphone[i * O : i * O + N]
+        # speaker_block = signal_loudspeaker[i * O : i * O + N]
+        # noise_block = noise_signal[i * O : i * O + N]
 
 
-    #     # noise_block_power = np.linalg.norm(noise_block, 2) / len(noise_block)
-    #     # if noise_block_power > noise_power_threshold:
-    #     #     detector_benchmark[i * N : (i + 1) * N] = np.ones((N,))
+        # noise_block_power = np.linalg.norm(noise_block, 2) / len(noise_block)
+        # if noise_block_power > noise_power_threshold:
+        #     detector_benchmark[i * N : (i + 1) * N] = np.ones((N,))
 
-    #     # #TODO: add more samples for X = (x1, x2, ..., xN) where x1 is vector of length N
-    #     # detector_output[i * N : (i + 1) * N] = dtd.is_double_talk(
-    #     #     speaker_block, mic_block, speaker_block
-    #     # )[0] * np.ones(
-    #     #     (N,)
-    #     # )  # take only open loop result
+        # #TODO: add more samples for X = (x1, x2, ..., xN) where x1 is vector of length N
+        # detector_output[i * N : (i + 1) * N] = dtd.is_double_talk(
+        #     speaker_block, mic_block, speaker_block
+        # )[0] * np.ones(
+        #     (N,)
+        # )  # take only open loop result
 
-    #     # Benesty's algorithm
-    #     detector_output[i * N : (i + 1) * N] = dtd_benesty.is_double_talk(speaker_block, mic_block) * np.ones((N,))
-    #     # detector_output[i * O : i * O + N] = dtd_benesty.is_double_talk(speaker_block, mic_block) * np.ones((N,))
+        # Benesty's algorithm
+        # detector_output[i * N : (i + 1) * N] = dtd_benesty.is_double_talk(speaker_block, mic_block) * np.ones((N,))
+        # detector_output[i * O : i * O + N] = dtd_benesty.is_double_talk(speaker_block, mic_block) * np.ones((N,))
 
-    #     # # MDF
-    #     # mic_block = signal_microphone[i * N : (i + 1) * N]
-    #     # speaker_block = signal_loudspeaker[i * N : (i + 2) * N]
-    #     # detector_output[i * N : (i + 1) * N] = dtd_mdf.is_double_talk(speaker_block, mic_block, speaker_block)
+        # #MDF
+        detector_output[i * N : (i + 1) * N] = dtd_mdf.is_double_talk(speaker_block, mic_block)
 
-    #     end = time.time()
-    #     time_accumulator += end - start
-    #     # print(f"Average iteration time: {time_accumulator / (i+1)}")
+        end = time.time()
+        time_accumulator += end - start
+        # print(f"Average iteration time: {time_accumulator / (i+1)}")
 
     # plot_results(signal_microphone, noise_signal, detector_output, detector_benchmark)
     # plot_results(signal_microphone, signal_loudspeaker, detector_output, detector_benchmark)

@@ -193,129 +193,76 @@ class RobustNormalizedCrossCorrelationCalculator:
 
         return rho
 
-
-class TimeDomainCoherenceCalculator:
-    def __init__(self, block_length, lambda_coherence):
-        self.block_length = block_length
-        self.lambda_coherence = lambda_coherence
-        self.h = np.zeros(block_length)
-        self.rxy = np.zeros(block_length)
-        self.Rxx_inv = np.identity(block_length) * 1e-5
-        # self.Rxx = np.identity(block_length)
-        # self.Rxx_inv = np.identity(block_length)
-        self.var_y = 0.
-        self.var_x = 0.
-        self.eta = 0.
-        self.ryhaty=0.
-        self.mu = 0.1
-
-    def calculate_rho(self, estimate, observation):
-        # if abs(np.trace(self.Rxx_inv)) >= 1e80 or abs(np.trace(self.Rxx_inv)) == 0.:
-        #     self.Rxx_inv = np.identity(self.block_length)
-        #     self.var_y = 0.
-        #     self.rxy = np.zeros(self.block_length)
-        #     self.h = np.zeros(self.block_length)
-
-        # self.var_y = self.lambda_coherence * self.var_y + observation**2
-        self.var_y = self.lambda_coherence * self.var_y + (1-self.lambda_coherence) * observation**2
-
-        # self.var_x = self.lambda_coherence * self.var_x + (1-self.lambda_coherence) * estimate**2
-        self.var_x = self.lambda_coherence * self.var_x + (1-self.lambda_coherence) * (estimate**2).sum()
-
-        # self.ryhaty = self.lambda_coherence * self.ryhaty + (1-self.lambda_coherence) * (estimate * observation)
-        # self.ryhaty = self.lambda_coherence * self.ryhaty + (estimate * observation)
-
-        # # self.rxy = self.lambda_coherence * self.rxy + (estimate * observation)
-        self.rxy = self.lambda_coherence * self.rxy + (1-self.lambda_coherence) * (estimate * observation)
-
-        # # kalman_gain = ((self.Rxx_inv @ estimate)) / (self.lambda_coherence + (estimate @ self.Rxx_inv @ estimate))
-        # kalman_gain = ((1-self.lambda_coherence) * (self.Rxx_inv @ estimate)) / (self.lambda_coherence + (1-self.lambda_coherence) * (estimate @ self.Rxx_inv @ estimate))
-
-        # self.h = self.h + kalman_gain * (observation - estimate @ self.h)
-        self.h = self.h + ((self.mu * (observation - estimate @ self.h) * estimate) / (self.var_x + 1e-10))
-        # # # self.eta = self.lambda_coherence * self.eta + observation - ((estimate @ self.h) * (self.lambda_coherence / (self.lambda_coherence + (estimate @ self.Rxx_inv @ estimate))))
-
-        # if estimate.sum() != 0.:
-        #     self.Rxx_inv = (self.Rxx_inv - np.outer(kalman_gain, (estimate @ self.Rxx_inv))) / self.lambda_coherence
-        # # self.Rxx = self.lambda_coherence * self.Rxx + (1-self.lambda_coherence) * np.outer(estimate, estimate)
-
-        # self.h = np.linalg.solve(self.Rxx + (1e-10 * np.identity(self.block_length)), self.rxy)
-
-        # self.Rxx_inv /= np.trace(self.Rxx_inv)
-
-        # self.Rxx_inv /= np.trace(self.Rxx_inv)
-        # self.var_y = self.lambda_coherence * self.var_y + observation**2
-        # self.var_x = self.lambda_coherence * self.var_x + (1-self.lambda_coherence) * estimate**2
-        # self.var_y = self.lambda_coherence * self.var_y + (1-self.lambda_coherence) * observation**2
-
-        rho = np.sqrt(abs(self.rxy @ self.h) / (self.var_y + 1e-10))
-
-        # rho = np.sqrt(abs(self.eta) / (self.var_y + 1e-5))
-        # rho = self.rxy / (np.sqrt(self.var_y * self.var_x) + 1e-10)
-        # rho = rho.max()
-        # rho = abs(rho).mean()
-        # rho = np.sqrt(abs(self.ryhaty) / (self.var_y + 1e-10))
-
-        # print(self.Rxx_inv)
-        print(rho)
-        if rho > 1.:
-            rho = 1.
-
-        # if rho is np.nan:
-        #     a = 0
-
-        # kalman_gain = ((self.Rxx_inv @ estimate)) / (self.lambda_coherence + (estimate @ self.Rxx_inv @ estimate))
-        # self.Rxx_inv = (self.Rxx_inv - (np.outer(kalman_gain, estimate) @ self.Rxx_inv)) / self.lambda_coherence
-        # self.h = self.h + kalman_gain * (observation - estimate @ self.h)
-
-        return rho
-
-
 class MDFCoherenceCalculator:
-    def __init__(self, block_length, lambda_coherence):
+    def __init__(self, block_length, filter_length, lambda_coherence):
         self.block_length = block_length
         self.lambda_coherence = lambda_coherence
-        self.h = np.zeros(block_length)
-        self.rxy = np.zeros(block_length)
-        self.Rxx = np.identity(block_length)
-        self.Rxx_inv = np.identity(block_length)
-        self.var_y = 0.
-        self.var_x = 0.
+        self.N_fft = 2*block_length
+        self.var_D = 0.
+        self.var_X = np.zeros(self.N_fft,dtype="float64") # time domain
         self.eta = 0.
-        self.ryhaty=0.
+        self.K = filter_length // block_length
+        self.x_old = np.zeros(block_length,dtype="float64") # time domain
+        self.U = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
+        self.H = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
+        self.rxy = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
 
     def calculate_rho(self, estimate, observation):
 
-        X_k = fft(estimate)
+        # X_k = fft(estimate)
 
-        Y_k = self.H_k * X_k
+        # Update multiframe input avaMic u_n = [x_n, ..., x_n-k+1]
+        # for convolution operation h_n * u_n
+        x_now = np.concatenate([self.x_old,estimate])
+        X = fft(x_now)
+        self.U[1:] = self.U[1:]
+        self.U[-1] = X
+        self.x_old = estimate
 
-        y_t = ifft(Y_k)[self.block_length:]
+        Yhat = (self.H * self.U).sum(axis=0)
 
-        e_t = observation - y_t
+        yhat_t = ifft(Yhat)[self.block_length:]
 
-        padding = [(0, 0) for _ in range(estimate.ndim)]
-        padding[-1] = (self.block_length, 0)
-        e_t = np.pad(e_t, padding, mode="constant")
+        e_t = observation - yhat_t
 
-        E_k = fft(e_t)
+        # padding = [(0, 0) for _ in range(estimate.ndim)]
+        # padding[-1] = (self.block_length, 0)
+        # e_t = np.pad(e_t, padding, mode="constant")
+        e_fft = np.zeros(shape=(self.N_fft,),dtype="float64")
+        e_fft[self.block_length:] = e_t
 
-        G_k = E_k * X_k.conj()
-        g_t = ifft(G_k)
-
-        # Constraint on gradient
-        g_t[self.block_length:] = 0.
-        G_k = fft(g_t)
+        E = fft(e_fft)
 
         # Update statistics
-        self.var_X_k = self.lambda_coherence * self.var_X_k + (1-self.lambda_coherence) * abs(X_k * X_k.conjugate())
+        self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (abs(self.U)**2).sum(axis=0)
 
-        # Divide by var_X_k
-        self.H_k += 2 * self.mu * G_k / (self.var_X_k + 1e-10)
+        G = (E * self.U.conj()) / (self.var_X + 1e-10)
 
-        #TODO: return E_k
+        # Apply IFFT on each block separately
+        g = ifft(G)
 
-        rho = np.sqrt(self.ryhaty / (self.var_y + 1e-10))
+        # Constraint on gradient
+        g[:,self.block_length:] = 0.
+
+        # Apply FFT on each block separately
+        G = fft(g)
+
+        # Update EC filter
+        self.H += (1-self.lambda_coherence) * G
+
+        # Compute statistics
+        d_fft = np.zeros(shape=(self.N_fft,),dtype="float64")
+        d_fft[self.block_length:] = observation
+
+        D = fft(d_fft)
+
+        self.var_D = self.lambda_coherence * self.var_D + (1-self.lambda_coherence) * (abs(D)**2).sum()
+        self.rxy = self.lambda_coherence * self.rxy + (1-self.lambda_coherence) * (self.U.conj() * D)
+
+        # Do not update eta if not positive (see robust Benesty DTD)
+        self.eta = (self.rxy[:,None] @ self.H[...,None].conj()).sum()
+
+        rho = np.sqrt(abs(self.eta) / (self.var_D + 1e-10))
 
         # print(self.Rxx_inv)
         print(rho)

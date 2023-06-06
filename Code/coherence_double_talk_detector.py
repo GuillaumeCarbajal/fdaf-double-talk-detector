@@ -1,12 +1,12 @@
 import numpy as np
+from coherence_calculator import (
+    CoherenceCalculator,
+    CrossCorrelationCalculator,
+    MDFCoherenceCalculator,
+    NormalizedCrossCorrelationCalculator,
+    RobustNormalizedCrossCorrelationCalculator,
+)
 from numpy.fft import fft
-
-from coherence_calculator import (CoherenceCalculator,
-                                  CrossCorrelationCalculator,
-                                  MDFCoherenceCalculator,
-                                  NormalizedCrossCorrelationCalculator,
-                                  RobustNormalizedCrossCorrelationCalculator,
-                                  TimeDomainCoherenceCalculator)
 
 
 class CoherenceDoubleTalkDetector:
@@ -113,9 +113,9 @@ class MDFDoubleTalkDetector:
         A double-talk detector based on coherence between loudspeaker and microphone signal (open loop),
         and estimated loudspeaker signal at microphone and microphone signal (closed loop).
     """
-    def __init__(self, block_length, lambda_coherence):
+    def __init__(self, block_length, filter_length, lambda_coherence):
         self.block_length = block_length
-        self.mdf_coherence = MDFCoherenceCalculator(block_length, lambda_coherence)
+        self.mdf_coherence = MDFCoherenceCalculator(block_length, filter_length, lambda_coherence)
 
     def is_double_talk(self, loudspeaker_samples_block, microphone_samples_block):
         """
