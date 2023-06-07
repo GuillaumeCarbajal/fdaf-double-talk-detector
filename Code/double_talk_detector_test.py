@@ -43,8 +43,8 @@ def main():
         # "../../../../../../stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_external.wav"
         # "stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_external.wav"
         # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_external.wav"
-        # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_external.wav"
-        "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-nearend_16k.wav"
+        "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_external.wav"
+        # "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-nearend_16k.wav"
     )
     signal_loudspeaker, fe = sf.read(
         # "../../outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_ECOutput.wav"
@@ -53,29 +53,31 @@ def main():
         # "../../../../../../stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_internal.wav"
         # "stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_internal.wav"
         # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_internal.wav"
-        # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_internal.wav"
-        "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-farend_16k.wav"
+        "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_internal.wav"
+        # "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-farend_16k.wav"
     )
     noise_signal, fe = sf.read(
         # "../../../../../../stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_nearend.wav"
         # "stages/echo-reduction/datasets/add-artificial-delay/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_nearend.wav"
         # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/629e8071a8fce5001f505436/629e8071a8fce5001f505436_0_1919_1919-142785_nearend.wav"
-        # "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_nearend.wav"
-        "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-nearend-only.wav"
+        "stages/echo-reduction/datasets/preprocess/outs/AvaEchoCancellationDatasets/DoubleTalk/6290fa2176495d001c96e9b8/6290fa2176495d001c96e9b8_0_652_652-130737_nearend.wav"
+        # "stages/echo-reduction/residual-echo-suppression/evaluate/fdaf-double-talk-detector/audio/Example_2/input-nearend-only.wav"
     )
 
     # N = 4096
-    # N = 512
-    N = 256
+    N = 512
+    # N = 256
     # O = int(N - 1)
 
+    # filter_length = 256
+    # filter_length = 512
     filter_length = 1024
 
     dtd = CoherenceDoubleTalkDetector(block_length=N, lambda_coherence=0.9)
     dtd_cc = CrossCorrelationDoubleTalkDetector(block_length=N, lambda_coherence=0.9999)
     dtd_benesty = BenestyDoubleTalkDetector(block_length=N, lambda_coherence=0.999, lambda_rls=0.9999)
     dtd_robust_benesty = RobustBenestyDoubleTalkDetector(block_length=N, lambda_coherence=0.9999, lambda_rls=0.99999)
-    dtd_mdf = MDFDoubleTalkDetector(block_length=N, filter_length=filter_length, lambda_coherence=0.9)
+    dtd_mdf = MDFDoubleTalkDetector(block_length=N, filter_length=filter_length, lambda_coherence=0.92)
 
     noise_power_threshold = 0.0010  # power of noise block to account as active (for benchmark purposes only)
 
@@ -91,9 +93,9 @@ def main():
 
 
 
-    # # To realign external / internal audio
-    # signal_microphone = signal_microphone[int(0.08*fe):]
-    # signal_microphone = np.pad(signal_microphone, pad_width=(0,int(0.08*fe)), mode="constant")
+    # To realign external / internal audio
+    signal_microphone = signal_microphone[int(0.08*fe):]
+    signal_microphone = np.pad(signal_microphone, pad_width=(0,int(0.08*fe)), mode="constant")
 
 
 

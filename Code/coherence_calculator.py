@@ -199,13 +199,16 @@ class MDFCoherenceCalculator:
         self.lambda_coherence = lambda_coherence
         self.N_fft = 2*block_length
         self.var_D = 0.
-        self.var_X = np.zeros(self.N_fft,dtype="float64") # time domain
         self.eta = 0.
         self.K = filter_length // block_length
         self.x_old = np.zeros(block_length,dtype="float64") # time domain
         self.U = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
         self.H = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
         self.rxy = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
+        self.var_X = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
+
+        # self.U_diag = np.zeros((self.K * self.N_fft, self.N_fft), dtype="complex128") # TF domain
+        # self.var_X = np.zeros((self.K * self.N_fft, self.N_fft), dtype="complex128") # TF domain
 
     def calculate_rho(self, estimate, observation):
 
@@ -215,28 +218,65 @@ class MDFCoherenceCalculator:
         # for convolution operation h_n * u_n
         x_now = np.concatenate([self.x_old,estimate])
         X = fft(x_now)
-        self.U[1:] = self.U[1:]
+        self.U[:-1] = self.U[1:]
         self.U[-1] = X
         self.x_old = estimate
 
         Yhat = (self.H * self.U).sum(axis=0)
+        yhat_t = ifft(Yhat)
+        yhat_t[:self.block_length] = 0.
+        Yhat = fft(yhat_t)
 
-        yhat_t = ifft(Yhat)[self.block_length:]
+        # yhat_t = ifft(Yhat)[self.block_length:]
 
-        e_t = observation - yhat_t
+        # External mic in TF domain
+        d_fft = np.zeros(shape=(self.N_fft,),dtype="float64")
+        d_fft[self.block_length:] = observation
 
-        # padding = [(0, 0) for _ in range(estimate.ndim)]
-        # padding[-1] = (self.block_length, 0)
-        # e_t = np.pad(e_t, padding, mode="constant")
-        e_fft = np.zeros(shape=(self.N_fft,),dtype="float64")
-        e_fft[self.block_length:] = e_t
+        D = fft(d_fft)
 
-        E = fft(e_fft)
+        # e_t = observation - yhat_t
+
+        # e_fft = np.zeros(shape=(self.N_fft,),dtype="float64")
+        # e_fft[self.block_length:] = e_t
+        # E = fft(e_fft)
+
+        E = D - Yhat
 
         # Update statistics
-        self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (abs(self.U)**2).sum(axis=0)
+        # self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (abs(self.U)**2).sum(axis=0)
+        # self.var_X = self.lambda_coherence * self.var_X + (abs(self.U)**2).sum(axis=0)
+        # self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (abs(self.U)**2)
+        # self.var_X = self.lambda_coherence * self.var_X + (abs(self.U)**2)
+
+        U_01 = ifft(self.U)
+        U_01[:, :self.block_length] = 0
+        U_01 = fft(U_01)
+        self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (self.U.conj() * U_01)
+        # self.var_X = self.lambda_coherence * self.var_X + (self.U.conj() * U_01)
+
+        #TODO: compute as diagonal matrices
+
 
         G = (E * self.U.conj()) / (self.var_X + 1e-10)
+        # G = np.linalg.solve(self.var_X + np.identity(self.var_X.shape[0] * 1e-10),(E * self.U.conj()).reshape)
+
+
+
+        # self.H += (1-self.lambda_coherence) * G
+        # self.H += G
+
+
+        # # Apply IFFT on each block separately
+        # h = ifft(self.H)
+
+        # # Constraint on gradient
+        # h[:,self.block_length:] = 0.
+
+        # # Apply FFT on each block separately
+        # self.H = fft(h)
+
+
 
         # Apply IFFT on each block separately
         g = ifft(G)
@@ -248,16 +288,15 @@ class MDFCoherenceCalculator:
         G = fft(g)
 
         # Update EC filter
+        # self.H += 2 * (1-self.lambda_coherence) * G
         self.H += (1-self.lambda_coherence) * G
+        # self.H += G
 
         # Compute statistics
-        d_fft = np.zeros(shape=(self.N_fft,),dtype="float64")
-        d_fft[self.block_length:] = observation
-
-        D = fft(d_fft)
-
         self.var_D = self.lambda_coherence * self.var_D + (1-self.lambda_coherence) * (abs(D)**2).sum()
+        # self.var_D = self.lambda_coherence * self.var_D + (abs(D)**2).sum()
         self.rxy = self.lambda_coherence * self.rxy + (1-self.lambda_coherence) * (self.U.conj() * D)
+        # self.rxy = self.lambda_coherence * self.rxy + (self.U.conj() * D)
 
         # Do not update eta if not positive (see robust Benesty DTD)
         self.eta = (self.rxy[:,None] @ self.H[...,None].conj()).sum()
