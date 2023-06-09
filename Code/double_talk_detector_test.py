@@ -71,7 +71,10 @@ def main():
 
     # filter_length = 256
     # filter_length = 512
-    filter_length = 1024
+    # filter_length = 1024
+    filter_length = 2048
+    # filter_length = 2304
+    # filter_length = 2560
 
     dtd = CoherenceDoubleTalkDetector(block_length=N, lambda_coherence=0.9)
     dtd_cc = CrossCorrelationDoubleTalkDetector(block_length=N, lambda_coherence=0.9999)
@@ -93,9 +96,9 @@ def main():
 
 
 
-    # To realign external / internal audio
-    signal_microphone = signal_microphone[int(0.08*fe):]
-    signal_microphone = np.pad(signal_microphone, pad_width=(0,int(0.08*fe)), mode="constant")
+    # # To realign external / internal audio
+    # signal_microphone = signal_microphone[int(0.08*fe):]
+    # signal_microphone = np.pad(signal_microphone, pad_width=(0,int(0.08*fe)), mode="constant")
 
 
 

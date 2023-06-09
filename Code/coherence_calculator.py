@@ -201,14 +201,21 @@ class MDFCoherenceCalculator:
         self.var_D = 0.
         self.eta = 0.
         self.K = filter_length // block_length
-        self.x_old = np.zeros(block_length,dtype="float64") # time domain
+        self.x_old = np.zeros(block_length, dtype="float64") # time domain
         self.U = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
         self.H = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
         self.rxy = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
-        self.var_X = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
 
-        # self.U_diag = np.zeros((self.K * self.N_fft, self.N_fft), dtype="complex128") # TF domain
-        # self.var_X = np.zeros((self.K * self.N_fft, self.N_fft), dtype="complex128") # TF domain
+        # self.var_X = np.zeros((self.K, self.N_fft), dtype="complex128") # TF domain
+        self.var_X = np.zeros((1, self.N_fft), dtype="complex128") # TF domain
+
+        self.U_diag = np.zeros((self.K * self.N_fft, self.N_fft), dtype="complex128") # TF domain
+        self.U01_diag = np.zeros((self.K * self.N_fft, self.N_fft), dtype="complex128") # TF domain
+        self.var_X_diag = np.zeros((self.K * self.N_fft, self.K * self.N_fft), dtype="complex128") # TF domain
+
+        self.I_N_fft = np.identity(self.N_fft, dtype="float64")
+        self.var_X_diag_inv = np.identity((self.K * self.N_fft), dtype="complex128") # TF domain
+        self.I_L = np.identity((self.K * self.N_fft), dtype="complex128") # TF domain
 
     def calculate_rho(self, estimate, observation):
 
@@ -221,6 +228,9 @@ class MDFCoherenceCalculator:
         self.U[:-1] = self.U[1:]
         self.U[-1] = X
         self.x_old = estimate
+
+        self.U_diag[:-self.N_fft] = self.U_diag[self.N_fft:]
+        self.U_diag[-self.N_fft:] = np.diag(X)
 
         Yhat = (self.H * self.U).sum(axis=0)
         yhat_t = ifft(Yhat)
@@ -243,54 +253,102 @@ class MDFCoherenceCalculator:
 
         E = D - Yhat
 
-        # Update statistics
-        # self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (abs(self.U)**2).sum(axis=0)
-        # self.var_X = self.lambda_coherence * self.var_X + (abs(self.U)**2).sum(axis=0)
-        # self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (abs(self.U)**2)
-        # self.var_X = self.lambda_coherence * self.var_X + (abs(self.U)**2)
+        # Update filter only if far-end is active
+        # Avoids divergence after periods of inactive far-end
+        if abs(x_now).mean() >= 0.01:
+            # self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (abs(self.U)**2).sum(axis=0)
+            self.var_X = self.lambda_coherence * self.var_X + (abs(self.U)**2).sum(axis=0)
+            # self.var_X = self.lambda_coherence * self.var_X + (abs(self.U)**2).mean(axis=0)
+            # self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (abs(self.U)**2)
+            # self.var_X = self.lambda_coherence * self.var_X + (abs(self.U)**2)
+            # self.var_X = self.lambda_coherence * self.var_X + (abs(self.U[-1])**2)
+            # self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (abs(self.U[-1])**2)
 
-        U_01 = ifft(self.U)
-        U_01[:, :self.block_length] = 0
-        U_01 = fft(U_01)
-        self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (self.U.conj() * U_01)
-        # self.var_X = self.lambda_coherence * self.var_X + (self.U.conj() * U_01)
-
-        #TODO: compute as diagonal matrices
-
-
-        G = (E * self.U.conj()) / (self.var_X + 1e-10)
-        # G = np.linalg.solve(self.var_X + np.identity(self.var_X.shape[0] * 1e-10),(E * self.U.conj()).reshape)
-
-
-
-        # self.H += (1-self.lambda_coherence) * G
-        # self.H += G
+            # U_01 = ifft(self.U)
+            # U_01[:, :self.block_length] = 0
+            # U_01 = fft(U_01)
+            # # # # self.var_X = self.lambda_coherence * self.var_X + (1-self.lambda_coherence) * (self.U.conj() * U_01)
+            # # # self.var_X = self.lambda_coherence * self.var_X + (self.U.conj() * U_01)
+            # self.var_X = self.lambda_coherence * self.var_X + (self.U.conj() * U_01).mean(axis=0)
+            # self.var_X = self.lambda_coherence * self.var_X + (self.U[-1].conj() * U_01[-1])
 
 
-        # # Apply IFFT on each block separately
-        # h = ifft(self.H)
-
-        # # Constraint on gradient
-        # h[:,self.block_length:] = 0.
-
-        # # Apply FFT on each block separately
-        # self.H = fft(h)
+            # # kalman_gain = self.U.conj() / (self.var_X * self.lambda_coherence + U_01 * self.U.conj())
+            # # G = kalman_gain * E
 
 
+            # G = (E * self.U.conj()) / (self.var_X + 1e-10)
+            G = (E * self.U.conj() * self.K) / (self.var_X + 1e-10)
 
-        # Apply IFFT on each block separately
-        g = ifft(G)
+            # # #TODO: compute as diagonal matrices
+            # X_01 = ifft(X)
+            # X_01[:self.block_length] = 0.
+            # X_01 = fft(X_01)
+            # self.U01_diag[:-self.N_fft] = self.U01_diag[self.N_fft:]
+            # self.U01_diag[-self.N_fft:] = np.diag(X_01)
 
-        # Constraint on gradient
-        g[:,self.block_length:] = 0.
+            # self.var_X_diag = self.lambda_coherence * self.var_X_diag + (self.U_diag.conj() @ self.U01_diag.T)
+            # # self.var_X_diag = self.lambda_coherence * self.var_X_diag + (1-self.lambda_coherence) * (self.U_diag.conj() @ self.U01_diag.T)
 
-        # Apply FFT on each block separately
-        G = fft(g)
+            # G = np.linalg.solve(self.var_X_diag + (np.identity(self.var_X_diag.shape[0]) * 1e-10), self.U_diag.conj() @ E)
+            # # G = np.linalg.inv(self.var_X_diag + (np.identity(self.var_X_diag.shape[0]) * 1e-10))
+            # # G = G @ self.U_diag.conj() @ E
+            # G = self.U_diag.conj() @ G
+            # G = G.reshape(self.K, -1)
 
-        # Update EC filter
-        # self.H += 2 * (1-self.lambda_coherence) * G
-        self.H += (1-self.lambda_coherence) * G
-        # self.H += G
+            # Apply IFFT on each block separately
+            g = ifft(G)
+
+            # Constraint on gradient
+            g[:,self.block_length:] = 0.
+
+            # Apply FFT on each block separately
+            G = fft(g)
+
+            # Update EC filter
+            # self.H += 2 * (1-self.lambda_coherence) * G
+            # self.H += (1-self.lambda_coherence) * G
+            self.H += G
+
+
+        # if abs(x_now).mean() >= 0.00:
+
+        #     denom = np.linalg.inv((self.lambda_coherence * self.I_N_fft) + (self.U01_diag.T @ self.var_X_diag_inv @ self.U_diag.conj()))
+        #     kalman_gain = (self.var_X_diag_inv @ self.U_diag.conj()) @ denom
+        #     G = kalman_gain @ E
+        #     G = G.reshape(self.K, -1)
+
+        #     # self.H += (1-self.lambda_coherence) * G
+        #     # self.H += G
+
+
+        #     # # Apply IFFT on each block separately
+        #     # h = ifft(self.H)
+
+        #     # # Constraint on gradient
+        #     # h[:,self.block_length:] = 0.
+
+        #     # # Apply FFT on each block separately
+        #     # self.H = fft(h)
+
+
+
+        #     # Apply IFFT on each block separately
+        #     g = ifft(G)
+
+        #     # Constraint on gradient
+        #     g[:,self.block_length:] = 0.
+
+        #     # Apply FFT on each block separately
+        #     G = fft(g)
+
+        #     # Update EC filter
+        #     # self.H += 2 * (1-self.lambda_coherence) * G
+        #     # self.H += (1-self.lambda_coherence) * G
+        #     self.H += G
+
+        #     # Update var_X_diag_inv
+        #     self.var_X_diag_inv = ((self.I_L - (kalman_gain @ self.U01_diag.T)) @ self.var_X_diag_inv) / self.lambda_coherence
 
         # Compute statistics
         self.var_D = self.lambda_coherence * self.var_D + (1-self.lambda_coherence) * (abs(D)**2).sum()
